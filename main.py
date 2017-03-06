@@ -1,23 +1,48 @@
-import dht,machine
-import urequests
-import network
 import time
 
+import urequests
+#import requests as urequests
+
+import dht,machine,network
+
+V = "0.1"
+
+dhts = {}
+def dht22(pin):
+	#return '{{"temperature":{},"humidity":{}}}'.format(12, 34)
+	if not pin in dhts:
+		d = dht.DHT22(machine.Pin(pin))
+		dhts[pin] = d
+	else:
+		d = dhts[pin]
+	d.measure()
+	return '{{"temperature":{},"humidity":{}}}'.format(d.temperature(), d.humidity())
+
+AVAILABLE_SENSORS = {"dht22": dht22}
+configured_sensors = []
+
+
+#uniq = 1337
 uniq = int.from_bytes(machine.unique_id(),'little')
-host = "http://192.168.2.30:5000"
-url = host + "/iot/" + str(uniq) + "/"
+#host = "http://192.168.2.30:5000"
+host = "http://192.168.2.53:5000"
+url = host + "/iot/" + str(uniq) + "/{}/{}/"
 register_url = host + "/iot/register/"
+error_url = host + "/iot/" + str(uniq) + "/error/"
+headers = {'Content-Type': 'application/json'}
 registered = False
 
-def http(url,t,h):
-	headers = {'Content-Type': 'application/json'}
-	data ="{{'temperature':{},'humidity':{}}}".format(d.temperature(),d.humidity())
-	return urequests.post(url, data=data, headers=headers).text
-def register(register_url, uniq):
-	headers = {'Content-Type': 'application/json'}
-	data = "{{'board':{}}}".format(uniq)
+def http(data, pin, sensor):
+	return urequests.post(url.format(sensor, pin), data=data, headers=headers).json()
+
+def register():
+	data = '{{"board":{},"v":{}}}'.format(uniq, V)
 	response = urequests.post(register_url, data=data, headers=headers)
-	return response.text == "ok" or response.json()["success"]
+	return response.json()
+
+def error(message):
+	response = urequests.post(error_url, data=message, headers=headers)
+
 def wifi_connect():
 	ap_if = network.WLAN(network.AP_IF)
 	ap_if.active(False)
@@ -31,15 +56,42 @@ def wifi_connect():
 			time.sleep_ms(500)
 	print("wifi: ", sta_if.ifconfig())
 
-wifi_connect()
-registered = register(register_url, uniq)
+def collect_data():
+	interval = 15
+	while True:
+		for func, pin, sensor in configured_sensors:
+			data = func(pin)
+			#print(data)
+			try:
+				result = http(data, pin, sensor)
+				if "interval" in result:
+					interval = result["interval"]
+					print("new interval: "+str(interval))
+			except Exception as e:
+				print("Exception!: "+str(e))
+				try:
+					error('{"EXCEPTION":"' + str(e) + '"}')
+				except:
+					pass
+		time.sleep(interval)
 
-d = dht.DHT22(machine.Pin(12))
+def initialize():
+	wifi_connect()
+	while True:
+		try:
+			sensors = register()
+			if sensors:
+				for sensor in sensors:
+					if not sensor in AVAILABLE_SENSORS:
+						error('{"NOT_IMPLEMENTED":"'+sensor+': '+str(sensors[sensor])+'"}')
+					for pin in sensors[sensor]:
+						configured_sensors.append((AVAILABLE_SENSORS[sensor], pin, sensor))
+				registered = True
+				break
+		except:
+			time.sleep(2)
 
-while True:
-	d.measure()
-	try:
-		http(url, d.temperature(), d.humidity())
-	except Exception as e:
-		print("Exception!: "+str(e))
-	time.sleep(15)
+####
+initialize()
+#print(configured_sensors)
+collect_data()
