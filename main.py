@@ -32,13 +32,13 @@ def callback(i):
 	global interrupt_values
 	interrupt_values[i]+=1
 def callback0(pin):
-	callback(0)
+	callback(pin)
 def callback1(pin):
-	callback(0)
+	callback(pin)
 def callback2(pin):
-	callback(0)
+	callback(pin)
 def callback3(pin):
-	callback(0)
+	callback(pin)
 def interrupt(pin, i, callback):
 	if not pin in interrupts:
 		port = machine.Pin(pin, machine.Pin.IN, machine.Pin.PULL_UP)
@@ -53,11 +53,11 @@ def interrupt(pin, i, callback):
 def interrupt0(pin):
 	return interrupt(pin, 0, callback0)
 def interrupt1(pin):
-	return interrupt(pin, 1, callback0)
+	return interrupt(pin, 1, callback1)
 def interrupt2(pin):
-	return interrupt(pin, 2, callback0)
+	return interrupt(pin, 2, callback2)
 def interrupt3(pin):
-	return interrupt(pin, 3, callback0)
+	return interrupt(pin, 3, callback3)
 AVAILABLE_SENSORS = {
 	"dht22": dht22,
 	"analog": analog,
